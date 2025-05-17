@@ -478,7 +478,7 @@ Rate:  ${rate}
               <span class="font-extrabold text-success">Hover</span> on grid node to show rays
             </p>
             <p>
-              <span class="font-extrabold text-success">P</span> to predict position
+              <span class="font-extrabold text-success">F</span> to predict position
             </p>
           </div>
         </UCard>
