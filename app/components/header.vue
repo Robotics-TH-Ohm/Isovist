@@ -8,6 +8,13 @@ if (colorMode.preference === 'system') {
 <template>
   <div class="absolute top-0 right-0 flex gap-2">
     <UButton
+      icon="i-lucide-newspaper"
+      variant="soft"
+      to="https://github.com/chubetho/isovist"
+      target="_blank"
+      size="sm"
+    />
+    <UButton
       icon="i-lucide-github"
       variant="soft"
       to="https://github.com/chubetho/isovist"

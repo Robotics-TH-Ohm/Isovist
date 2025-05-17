@@ -406,7 +406,7 @@ onMounted(animate)
 
 <template>
   <div class="p-6 mx-auto font-mono @container">
-    <div class="grid grid-cols-1 gap-6 @min-[1200px]:grid-cols-2">
+    <div class="grid grid-cols-1 gap-3 @min-[1200px]:grid-cols-2 @min-[1200px]:gap-6">
       <div class="relative flex flex-col gap-3 items-center justify-center">
         <Header />
 
