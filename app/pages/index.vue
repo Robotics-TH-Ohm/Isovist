@@ -117,24 +117,24 @@ const topkPoints = shallowRef<Point[]>()
 const hoverPoint = shallowRef<Point>()
 const finding = shallowRef(false)
 
-function find(k = 1, step = 10) {
+function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
   const viewpoints = []
 
   if (step) {
     for (let dx = -step; dx <= step; dx += step) {
       for (let dy = -step; dy <= step; dy += step) {
         viewpoints.push({
-          x: robot.state.value.x + dx,
-          y: robot.state.value.y + dy,
+          x: viewpoint.x + dx,
+          y: viewpoint.y + dy,
         })
       }
     }
   }
   else {
-    viewpoints.push({ x: robot.state.value.x, y: robot.state.value.y })
+    viewpoints.push({ x: viewpoint.x, y: viewpoint.y })
   }
 
-  const distanceFn = (() => {
+  const distFn = (() => {
     switch (config.value.distance) {
       case 'euclidean': return euclidean
       case 'manhattan': return manhattan
@@ -142,16 +142,14 @@ function find(k = 1, step = 10) {
     }
   })()
 
-  const keys = Array.from(config.value.features)
-
-  const allMatches: { viewpoint: Point, d: number }[] = []
+  const all: { viewpoint: Point, d: number }[] = []
   for (const viewpoint of viewpoints) {
     const points = cast(viewpoint, lines)
     const features = computeFeatures(viewpoint, points, config.value.features)
     if (!features)
       continue
 
-    for (const k of keys) {
+    for (const k of config.value.features) {
       if (!features[k])
         continue
 
@@ -163,39 +161,31 @@ function find(k = 1, step = 10) {
       features[k] = normalize(features[k], min, max)
     }
 
-    const matches: { viewpoint: Point, d: number }[] = []
+    const matches: typeof all = []
     for (const entry of db.value.entries) {
       if (!entry.features)
         continue
 
-      const d = distanceFn(features, entry.features)
+      const d = distFn(features, entry.features)
       matches.push({ viewpoint: entry.viewpoint, d })
     }
+
     matches.sort((a, b) => a.d - b.d)
-
-    const topk: { viewpoint: Point, d: number }[] = []
-    let i = 0
-    while (topk.length < k && i < matches.length) {
-      const m = matches[i]
-      if (
-        topk.find(i => i.viewpoint.x === m.viewpoint.x
-          && i.viewpoint.y === m.viewpoint.y
-          && i.d === m.d)
-      ) {
-        continue
-      }
-
-      topk.push(m)
-      i++
-    }
-    allMatches.push(...topk)
+    all.push(...matches.slice(0, k))
   }
 
-  const topMatches = Array.from(allMatches)
-    .sort((a, b) => a.d - b.d)
-    .slice(0, k)
+  all.sort((a, b) => a.d - b.d)
 
-  return topMatches.map(x => x.viewpoint)
+  const res: Point[] = []
+  while (res.length < k) {
+    const point = all.splice(0, 1)[0].viewpoint
+    const existed = res.find(p => p.x === point.x && p.y === point.y)
+
+    if (!existed)
+      res.push(point)
+  }
+
+  return res
 }
 
 const canvasEl = useTemplateRef('canvas')
@@ -372,7 +362,8 @@ useEventListener('keydown', (e) => {
     }
 
     setTimeout(() => {
-      topkPoints.value = find().map(p => ({
+      const viewpoint = { x: robot.state.value.x, y: robot.state.value.y }
+      topkPoints.value = predict(viewpoint).map(p => ({
         x: Math.round(p.x),
         y: Math.round(p.y),
       }))
@@ -402,6 +393,59 @@ function animate() {
   requestAnimationFrame(animate)
 }
 onMounted(animate)
+
+useEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 't') {
+    test()
+  }
+})
+
+function test() {
+  if (!config.value.features.length)
+    return
+
+  console.log('Begin')
+
+  let pass = 0
+  const bound = map.config.cell / 5
+  const viewpoints = grid.value.flatMap(p => [
+    { x: p.x, y: p.y },
+    { x: p.x - bound, y: p.y },
+    { x: p.x + bound, y: p.y },
+    { x: p.x, y: p.y - bound },
+    { x: p.x, y: p.y + bound },
+    { x: p.x - bound, y: p.y - bound },
+    { x: p.x - bound, y: p.y + bound },
+    { x: p.x + bound, y: p.y - bound },
+    { x: p.x + bound, y: p.y + bound },
+  ])
+
+  for (const viewpoint of viewpoints) {
+    const points = predict(viewpoint)
+    let found = false
+    for (const point of points) {
+      if (point.x > viewpoint.x - bound
+        && point.x < viewpoint.x + bound
+        && point.y > viewpoint.y - bound
+        && point.y < viewpoint.y + bound
+      ) {
+        found = true
+        break
+      }
+    }
+
+    if (found)
+      pass += 1
+  }
+
+  const rate = (pass * 100) / viewpoints.length
+  console.log(`
+Grid:  ${config.value.grid.type}
+Dist:  ${config.value.distance}
+Feats: ${config.value.features}
+Rate:  ${rate}
+  `)
+}
 </script>
 
 <template>
@@ -431,10 +475,10 @@ onMounted(animate)
               <span class="font-extrabold text-success">W/A/S/D</span> to move
             </p>
             <p>
-              <span class="font-extrabold text-success">Hover</span> on grid node to show its rays
+              <span class="font-extrabold text-success">Hover</span> on grid node to show rays
             </p>
             <p>
-              <span class="font-extrabold text-success">F</span> to find grid node
+              <span class="font-extrabold text-success">P</span> to predict position
             </p>
           </div>
         </UCard>
@@ -448,9 +492,9 @@ onMounted(animate)
               </span>
             </div>
 
-            <div class="flex flex-wrap gap-3 min-h-[2lh]">
+            <div class="flex flex-wrap gap-3">
               <p class="font-extrabold">
-                Found points:
+                Top 3 positions:
               </p>
               <span
                 v-for="f, i of topkPoints"

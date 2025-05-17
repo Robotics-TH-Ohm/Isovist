@@ -4,7 +4,7 @@ import { distPointToLine, distPointToPoint, isPointInCircle, isPointInPolygon } 
 interface Config {
   map: MapConfig
   obstacles: Obstacle[]
-  nums?: number
+  nums: number
 }
 
 export function orthogonalGrid(c: Config) {
@@ -89,7 +89,7 @@ export function randomGrid(c: Config) {
   }
 
   const grid: Point[] = []
-  const length = c.nums ?? 239
+  const length = c.nums
   const initalLength = Math.floor(length / 2)
 
   while (grid.length < initalLength) {

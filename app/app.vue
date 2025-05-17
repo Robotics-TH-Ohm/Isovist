@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const title = 'Kidnapped Robot and Isovist'
+const title = 'Kidnapped Robot Problem and Isovist'
 const description = `Simulated robot localization based on isovist feature matching. Analyze visible space geometry to determine the robot's position on a grid map.`
 
 useHead({
