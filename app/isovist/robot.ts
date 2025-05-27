@@ -2,30 +2,14 @@ interface Config {
   x?: number
   y?: number
   speed?: number
+  radius?: number
 }
 
 export function useRobot(config: Config = {}) {
-  const c = {
-    x: 0,
-    y: 0,
-    speed: 2,
-    ...config,
-  }
+  const x = shallowRef(config.x ?? 0)
+  const y = shallowRef(config.y ?? 0)
+  const speed = config.speed ?? 2
+  const radius = config.radius ?? 10
 
-  const state = ref({ ...c })
-
-  const up = () => {
-    state.value.y += state.value.speed
-  }
-  const down = () => {
-    state.value.y -= state.value.speed
-  }
-  const left = () => {
-    state.value.x += state.value.speed
-  }
-  const right = () => {
-    state.value.x -= state.value.speed
-  }
-
-  return { state, up, down, left, right }
+  return { x, y, radius, speed }
 }

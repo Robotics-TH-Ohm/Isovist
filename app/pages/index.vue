@@ -5,11 +5,14 @@ import { computeFeatures, features, normalize } from '~/isovist/features'
 import { orthogonalGrid, randomGrid } from '~/isovist/grid'
 import { map } from '~/isovist/map'
 import { useRobot } from '~/isovist/robot'
-import { cast } from '~/isovist/utils'
+import { cast, distPointToLine } from '~/isovist/utils'
 
 interface GlobalConfig {
   features: FeatureKey[]
-  distance: 'euclidean' | 'manhattan' | 'cosine'
+  distance: {
+    type: 'euclidean' | 'manhattan' | 'cosine'
+    lengthPercent: number
+  }
   grid: {
     show: boolean
     type: 'orthogonal' | 'random'
@@ -17,7 +20,9 @@ interface GlobalConfig {
   }
   robot: {
     rays: boolean
+    collision: boolean
   }
+
 }
 
 const obstacles = map.obstacles
@@ -27,21 +32,29 @@ const config = useSessionStorage<GlobalConfig>(
   'isovist_config',
   () => ({
     features: [],
-    distance: 'euclidean',
+    distance: {
+      type: 'euclidean',
+      lengthPercent: 50,
+    },
     grid: {
       show: true,
       type: 'orthogonal',
-      nums: 239,
+      nums: 250,
     },
     robot: {
-      rays: false,
+      rays: true,
+      collision: true,
     },
   }),
 )
 
 function checkAllFeatureKeys() {
   config.value.features = []
-  const keys = features.checkboxes.flatMap(c => 'disabled' in c && c.disabled ? [] : [c.value])
+  const keys = features.checkboxes.flatMap(
+    c => ('disabled' in c && c.disabled) || c.value === 'radialLengthSequence'
+      ? []
+      : [c.value],
+  )
   for (const k of keys) {
     config.value.features.push(k)
   }
@@ -135,7 +148,7 @@ function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
   }
 
   const distFn = (() => {
-    switch (config.value.distance) {
+    switch (config.value.distance.type) {
       case 'euclidean': return euclidean
       case 'manhattan': return manhattan
       case 'cosine': return cosine
@@ -166,7 +179,7 @@ function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
       if (!entry.features)
         continue
 
-      const d = distFn(features, entry.features)
+      const d = distFn(features, entry.features, config.value.distance.lengthPercent)
       matches.push({ viewpoint: entry.viewpoint, d })
     }
 
@@ -266,13 +279,13 @@ function draw() {
 
   // Draw rays
   if (config.value.robot.rays) {
-    const points = cast({ x: robot.state.value.x, y: robot.state.value.y }, lines)
-    ctx.lineWidth = 2
+    const points = cast({ x: robot.x.value, y: robot.y.value }, lines)
+    ctx.lineWidth = 1
     ctx.strokeStyle = successClr
-    ctx.globalAlpha = 0.5
+    ctx.globalAlpha = 0.4
     points.forEach((p) => {
       ctx.beginPath()
-      ctx.moveTo(robot.state.value.x, robot.state.value.y)
+      ctx.moveTo(robot.x.value, robot.y.value)
       ctx.lineTo(p.x, p.y)
       ctx.stroke()
     })
@@ -282,7 +295,7 @@ function draw() {
   // Draw robot
   ctx.fillStyle = errorClr
   ctx.beginPath()
-  ctx.arc(robot.state.value.x, robot.state.value.y, 10, 0, 2 * Math.PI)
+  ctx.arc(robot.x.value, robot.y.value, robot.radius, 0, 2 * Math.PI)
   ctx.fill()
 
   // Draw topk
@@ -301,7 +314,7 @@ function draw() {
     const points = cast({ x: hoverPoint.value.x, y: hoverPoint.value.y }, lines)
     ctx.lineWidth = 1
     ctx.strokeStyle = successClr
-    ctx.globalAlpha = 0.5
+    ctx.globalAlpha = 0.4
     points.forEach((p) => {
       ctx.beginPath()
       ctx.moveTo(hoverPoint.value!.x, hoverPoint.value!.y)
@@ -362,7 +375,7 @@ useEventListener('keydown', (e) => {
     }
 
     setTimeout(() => {
-      const viewpoint = { x: robot.state.value.x, y: robot.state.value.y }
+      const viewpoint = { x: robot.x.value, y: robot.y.value }
       topkPoints.value = predict(viewpoint).map(p => ({
         x: Math.round(p.x),
         y: Math.round(p.y),
@@ -373,18 +386,34 @@ useEventListener('keydown', (e) => {
 })
 
 function input() {
-  if (keys.has('w') && robot.state.value.y > 0) {
-    robot.down()
+  const target = { x: robot.x.value, y: robot.y.value }
+
+  if (keys.has('w')) {
+    target.y -= robot.speed
   }
-  if (keys.has('s') && robot.state.value.y < map.config.height) {
-    robot.up()
+  if (keys.has('s')) {
+    target.y += robot.speed
   }
-  if (keys.has('a') && robot.state.value.x > 0) {
-    robot.right()
+  if (keys.has('a')) {
+    target.x -= robot.speed
   }
-  if (keys.has('d') && robot.state.value.x < map.config.width) {
-    robot.left()
+  if (keys.has('d')) {
+    target.x += robot.speed
   }
+
+  target.x = Math.max(robot.radius, Math.min(target.x, map.config.width - robot.radius))
+  target.y = Math.max(robot.radius, Math.min(target.y, map.config.height - robot.radius))
+
+  if (config.value.robot.collision) {
+    for (const line of lines) {
+      if (distPointToLine(target, line) < robot.radius) {
+        return
+      }
+    }
+  }
+
+  robot.x.value = target.x
+  robot.y.value = target.y
 }
 
 function animate() {
@@ -475,10 +504,10 @@ Rate:  ${rate}
               <span class="font-extrabold text-success">W/A/S/D</span> to move
             </p>
             <p>
-              <span class="font-extrabold text-success">Hover</span> on grid node to show rays
+              <span class="font-extrabold text-success">F</span> to predict position
             </p>
             <p>
-              <span class="font-extrabold text-success">F</span> to predict position
+              Hover on grid node to show rays
             </p>
           </div>
         </UCard>
@@ -488,7 +517,7 @@ Rate:  ${rate}
             <div>
               <span class="font-extrabold">Robot: </span>
               <span class="text-success">
-                ({{ robot.state.value.x }},{{ robot.state.value.y }})
+                ({{ robot.x.value }},{{ robot.y.value }})
               </span>
             </div>
 
@@ -534,7 +563,36 @@ Rate:  ${rate}
             <UCheckboxGroup
               v-model="config.features"
               :items="features.checkboxes"
-            />
+            >
+              <template #label="{ item }">
+                <template v-if="item.value === 'radialLengthSequence'">
+                  <div class="flex items-center gap-6">
+                    <span class="shrink-0">{{ (item as any).label }} (Slow)</span>
+                    <template v-if="config.features.includes('radialLengthSequence')">
+                      <div
+                        class="flex items-center gap-3"
+                        @click.prevent
+                      >
+                        <USlider
+                          v-model="config.distance.lengthPercent"
+                          :min="0"
+                          :max="100"
+                          :step="25"
+                          size="xs"
+                          class="w-24"
+                          color="info"
+                        />
+                        <span class="text-xs">{{ config.distance.lengthPercent }}%</span>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+
+                <template v-else>
+                  {{ (item as any).label }}
+                </template>
+              </template>
+            </UCheckboxGroup>
           </div>
         </UCard>
 
@@ -544,7 +602,7 @@ Rate:  ${rate}
               Distances
             </p>
             <URadioGroup
-              v-model="config.distance"
+              v-model="config.distance.type"
               orientation="horizontal"
               :items="[
                 { label: 'Euclidean', value: 'euclidean' },
@@ -582,6 +640,7 @@ Rate:  ${rate}
                     size="sm"
                     orientation="vertical"
                     class="w-20"
+                    color="info"
                   />
                   <span>nodes</span>
                 </div>
@@ -593,7 +652,7 @@ Rate:  ${rate}
         <UCard>
           <div class="grid gap-3">
             <p class="font-extrabold">
-              Display
+              Others
             </p>
             <div class="flex gap-10">
               <USwitch
@@ -604,28 +663,13 @@ Rate:  ${rate}
                 v-model="config.robot.rays"
                 label="Robot rays"
               />
+              <USwitch
+                v-model="config.robot.collision"
+                label="Robot collision"
+              />
             </div>
           </div>
         </UCard>
-
-        <!-- <UCard>
-          <div class="grid gap-3">
-            <p class="mb-2 font-extrabold">
-              Robot
-            </p>
-
-            <label>
-              <span>Speed: </span>
-              <UInputNumber
-                v-model="robot.state.value.speed"
-                :min="1"
-                :step="1"
-                orientation="vertical"
-                class="w-20"
-              />
-            </label>
-          </div>
-        </UCard> -->
       </div>
     </div>
   </div>

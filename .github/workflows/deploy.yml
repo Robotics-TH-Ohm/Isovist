@@ -35,7 +35,7 @@ jobs:
         run: NUXT_APP_BASE_URL=/${{github.event.repository.name}}/ nlx nuxi build --preset github_pages
 
       - name: Setup Pages
-        uses: actions/configure-pages@v4
+        uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
         with:

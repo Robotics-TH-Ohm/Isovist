@@ -206,7 +206,7 @@ export const features: {
       value: 'radialLengthMax',
     },
     {
-      label: 'Radial Length Sequence (Slow)',
+      label: 'Radial Length Sequence',
       description: 'Sequence of distances from the viewpoint to an isovist vertex.',
       value: 'radialLengthSequence',
     },

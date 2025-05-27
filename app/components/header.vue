@@ -11,13 +11,13 @@ if (colorMode.preference === 'system') {
       <UButton
         icon="i-lucide-newspaper"
         variant="soft"
-        to="https://github.com/Robotics-TH-Ohm/Isovist-Report/blob/main/main.pdf"
+        to="https://robotics-th-ohm.github.io/Isovist-Report/"
         target="_blank"
         size="sm"
       />
     </UTooltip>
 
-    <UTooltip text="Github Repo">
+    <UTooltip text="Github Repository">
       <UButton
         icon="i-lucide-github"
         variant="soft"
