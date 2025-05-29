@@ -1,33 +1,11 @@
 <script setup lang="ts">
-import type { FeatureKey, FeaturesDb, Point } from '~/isovist/types'
+import type { FeaturesDb, GlobalConfig, Point, TopK } from '~/isovist/types'
 import { cosine, euclidean, manhattan } from '~/isovist/diff'
 import { computeFeatures, features, normalize } from '~/isovist/features'
 import { orthogonalGrid, randomGrid } from '~/isovist/grid'
 import { map } from '~/isovist/map'
 import { useRobot } from '~/isovist/robot'
 import { cast, distPointToLine } from '~/isovist/utils'
-
-interface GlobalConfig {
-  features: FeatureKey[]
-  distance: {
-    type: 'euclidean' | 'manhattan' | 'cosine'
-    percent: number
-  }
-  grid: {
-    show: boolean
-    type: 'orthogonal' | 'random'
-    nums: number
-  }
-  robot: {
-    rays: boolean
-    collision: boolean
-  }
-}
-
-type TopK = {
-  d: number
-  point: Point
-}[]
 
 const obstacles = map.obstacles
 const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
@@ -46,8 +24,14 @@ const config = useSessionStorage<GlobalConfig>(
       nums: 250,
     },
     robot: {
-      rays: true,
       collision: true,
+    },
+    lidar: {
+      rays: true,
+      points: true,
+    },
+    prediction: {
+      show: true,
     },
   }),
 )
@@ -132,7 +116,7 @@ const db = computed<FeaturesDb>(() => {
 
 const robot = useRobot({ x: 300, y: 90, speed: 1 })
 const topk = shallowRef<TopK>()
-const hoverPoint = shallowRef<Point>()
+const hover = shallowRef<Point>()
 const finding = shallowRef(false)
 
 function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
@@ -220,6 +204,7 @@ function draw() {
   const errorClr = style.getPropertyValue('--ui-error')
   const successClr = style.getPropertyValue('--ui-success')
   const infoClr = style.getPropertyValue('--ui-info')
+  const purleClr = '#9775fa'
   const textClr = style.getPropertyValue('--ui-text')
   const textMutedClr = style.getPropertyValue('--ui-text-muted')
 
@@ -282,19 +267,32 @@ function draw() {
     })
   })
 
-  // Draw rays
-  if (config.value.robot.rays) {
+  if (config.value.lidar.rays || config.value.lidar.points) {
     const points = cast({ x: robot.x.value, y: robot.y.value }, lines)
-    ctx.lineWidth = 1
-    ctx.strokeStyle = successClr
-    ctx.globalAlpha = 0.4
-    points.forEach((p) => {
-      ctx.beginPath()
-      ctx.moveTo(robot.x.value, robot.y.value)
-      ctx.lineTo(p.x, p.y)
-      ctx.stroke()
-    })
-    ctx.globalAlpha = 1.0
+
+    // Draw rays
+    if (config.value.lidar.rays) {
+      ctx.lineWidth = 1
+      ctx.strokeStyle = successClr
+      ctx.globalAlpha = 0.4
+      points.forEach((p) => {
+        ctx.beginPath()
+        ctx.moveTo(robot.x.value, robot.y.value)
+        ctx.lineTo(p.x, p.y)
+        ctx.stroke()
+      })
+      ctx.globalAlpha = 1.0
+    }
+
+    // Draw points
+    if (config.value.lidar.points) {
+      ctx.fillStyle = purleClr
+      points.forEach((p) => {
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, robot.radius / 2, 0, 2 * Math.PI)
+        ctx.fill()
+      })
+    }
   }
 
   // Draw robot
@@ -304,7 +302,7 @@ function draw() {
   ctx.fill()
 
   // Draw topk
-  if (topk.value) {
+  if (topk.value && config.value.prediction.show) {
     ctx.fillStyle = warningClr
     let i = 0
     for (const k of topk.value) {
@@ -315,22 +313,36 @@ function draw() {
   }
 
   // Draw hover node
-  if (hoverPoint.value) {
-    const points = cast({ x: hoverPoint.value.x, y: hoverPoint.value.y }, lines)
-    ctx.lineWidth = 1
-    ctx.strokeStyle = successClr
-    ctx.globalAlpha = 0.4
-    points.forEach((p) => {
-      ctx.beginPath()
-      ctx.moveTo(hoverPoint.value!.x, hoverPoint.value!.y)
-      ctx.lineTo(p.x, p.y)
-      ctx.stroke()
-    })
-    ctx.globalAlpha = 1.0
+  if (hover.value) {
+    const points = cast({ x: hover.value.x, y: hover.value.y }, lines)
+
+    // Draw rays
+    if (config.value.lidar.rays) {
+      ctx.lineWidth = 1
+      ctx.strokeStyle = successClr
+      ctx.globalAlpha = 0.4
+      points.forEach((p) => {
+        ctx.beginPath()
+        ctx.moveTo(hover.value!.x, hover.value!.y)
+        ctx.lineTo(p.x, p.y)
+        ctx.stroke()
+      })
+      ctx.globalAlpha = 1.0
+    }
+
+    // Draw points
+    if (config.value.lidar.points) {
+      ctx.fillStyle = purleClr
+      points.forEach((p) => {
+        ctx.beginPath()
+        ctx.arc(p.x, p.y, robot.radius / 2, 0, 2 * Math.PI)
+        ctx.fill()
+      })
+    }
 
     ctx.fillStyle = infoClr
     ctx.beginPath()
-    ctx.arc(hoverPoint.value.x, hoverPoint.value.y, 6, 0, 2 * Math.PI)
+    ctx.arc(hover.value.x, hover.value.y, robot.radius, 0, 2 * Math.PI)
     ctx.fill()
   }
 }
@@ -351,11 +363,11 @@ useEventListener(canvasEl, 'mousemove', useThrottleFn((event: MouseEvent) => {
   if (!entry)
     return
 
-  hoverPoint.value = entry.viewpoint
+  hover.value = entry.viewpoint
 }))
 
 useEventListener(canvasEl, 'mouseout', () => {
-  hoverPoint.value = undefined
+  hover.value = undefined
 })
 
 const keys = new Set<string>()
@@ -383,7 +395,7 @@ useEventListener('keydown', (e) => {
     setTimeout(() => {
       const viewpoint = { x: robot.x.value, y: robot.y.value }
       topk.value = predict(viewpoint).map(k => ({
-        d: k.d,
+        d: +k.d.toFixed(2),
         point: {
           x: Math.round(k.point.x),
           y: Math.round(k.point.y),
@@ -519,11 +531,20 @@ onMounted(animate)
 
         <UCard class="w-full @min-[1200px]:max-w-4/5">
           <div class="grid gap-3">
-            <div>
-              <span class="font-extrabold">Robot: </span>
-              <span class="text-success">
-                ({{ robot.x.value }},{{ robot.y.value }})
-              </span>
+            <div class="flex gap-3">
+              <div>
+                <span class="font-extrabold">Robot: </span>
+                <span class="text-success">
+                  ({{ robot.x.value }},{{ robot.y.value }})
+                </span>
+              </div>
+              |
+              <div>
+                <span class="font-extrabold">Hover: </span>
+                <span class="text-success">
+                  ({{ hover?.x }},{{ hover?.y }})
+                </span>
+              </div>
             </div>
 
             <div class="flex flex-wrap gap-3">
@@ -535,7 +556,7 @@ onMounted(animate)
                 :key="i"
               >
                 <span class="text-success">{{ i + 1 }}.</span>
-                <span>({{ k.point.x }},{{ k.point.y }})</span>
+                <span>({{ k.point.x }},{{ k.point.y }} | <span class="text-dimmed">{{ k.d }}</span>)</span>
               </span>
             </div>
           </div>
@@ -662,16 +683,24 @@ onMounted(animate)
             </p>
             <div class="flex gap-10">
               <USwitch
-                v-model="config.grid.show"
-                label="Grid points"
+                v-model="config.lidar.rays"
+                label="LiDAR rays"
               />
               <USwitch
-                v-model="config.robot.rays"
-                label="Robot rays"
+                v-model="config.lidar.points"
+                label="LiDAR points"
               />
               <USwitch
                 v-model="config.robot.collision"
-                label="Robot collision"
+                label="Collision"
+              />
+              <USwitch
+                v-model="config.grid.show"
+                label="Grid"
+              />
+              <USwitch
+                v-model="config.prediction.show"
+                label="Prediction"
               />
             </div>
           </div>

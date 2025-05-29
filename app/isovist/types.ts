@@ -68,3 +68,31 @@ export interface FeatureDbEntry {
   viewpoint: Point
   features: Partial<Features>
 }
+
+export interface GlobalConfig {
+  features: FeatureKey[]
+  distance: {
+    type: 'euclidean' | 'manhattan' | 'cosine'
+    percent: number
+  }
+  grid: {
+    show: boolean
+    type: 'orthogonal' | 'random'
+    nums: number
+  }
+  robot: {
+    collision: boolean
+  }
+  lidar: {
+    rays: boolean
+    points: boolean
+  }
+  prediction: {
+    show: boolean
+  }
+}
+
+export type TopK = {
+  d: number
+  point: Point
+}[]
