@@ -1,14 +1,14 @@
 import type { FeatureKey, Features } from './types'
 import { dtw } from './features'
 
-export function euclidean(f1: Partial<Features>, f2: Partial<Features>, lengthPercent = 100) {
+export function euclidean(f1: Partial<Features>, f2: Partial<Features>, percent = 100) {
   let sum = 0
   const keys = Object.keys(f1) as FeatureKey[]
 
   for (const key of keys) {
     if (key === 'radialLengthSequence') {
-      if (f1[key] && f2[key]) {
-        const length = Math.round((f1[key].length * lengthPercent) / 100)
+      if (f1[key] && f2[key] && percent) {
+        const length = Math.round((f1[key].length * percent) / 100)
         const diff = dtw(f1[key].slice(0, length), f2[key].slice(0, length))
         sum += diff * diff
       }
@@ -33,14 +33,14 @@ export function euclidean(f1: Partial<Features>, f2: Partial<Features>, lengthPe
   return Math.sqrt(sum)
 }
 
-export function manhattan(f1: Partial<Features>, f2: Partial<Features>, sequencePercent = 100) {
+export function manhattan(f1: Partial<Features>, f2: Partial<Features>, percent = 100) {
   let sum = 0
   const keys = Object.keys(f1) as FeatureKey[]
 
   for (const key of keys) {
     if (key === 'radialLengthSequence') {
-      if (f1[key] && f2[key]) {
-        const length = Math.round((f1[key].length * sequencePercent) / 100)
+      if (f1[key] && f2[key] && percent) {
+        const length = Math.round((f1[key].length * percent) / 100)
         const diff = dtw(f1[key].slice(0, length), f2[key].slice(0, length))
         sum += Math.abs(diff)
       }
@@ -64,7 +64,7 @@ export function manhattan(f1: Partial<Features>, f2: Partial<Features>, sequence
   return sum
 }
 
-export function cosine(f1: Partial<Features>, f2: Partial<Features>, sequencePercent = 100) {
+export function cosine(f1: Partial<Features>, f2: Partial<Features>, percent = 100) {
   let product = 0
   let magnitude1 = 0
   let magnitude2 = 0
@@ -72,8 +72,8 @@ export function cosine(f1: Partial<Features>, f2: Partial<Features>, sequencePer
   const keys = Object.keys(f1) as FeatureKey[]
   for (const key of keys) {
     if (key === 'radialLengthSequence') {
-      if (f1[key] && f2[key]) {
-        const length = Math.round((f1[key].length * sequencePercent) / 100)
+      if (f1[key] && f2[key] && percent) {
+        const length = Math.round((f1[key].length * percent) / 100)
         const diff = dtw(f1[key].slice(0, length), f2[key].slice(0, length))
         const v = diff * diff
         product += v

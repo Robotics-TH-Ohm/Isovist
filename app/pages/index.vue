@@ -11,7 +11,7 @@ interface GlobalConfig {
   features: FeatureKey[]
   distance: {
     type: 'euclidean' | 'manhattan' | 'cosine'
-    lengthPercent: number
+    percent: number
   }
   grid: {
     show: boolean
@@ -22,8 +22,12 @@ interface GlobalConfig {
     rays: boolean
     collision: boolean
   }
-
 }
+
+type TopK = {
+  d: number
+  point: Point
+}[]
 
 const obstacles = map.obstacles
 const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
@@ -34,7 +38,7 @@ const config = useSessionStorage<GlobalConfig>(
     features: [],
     distance: {
       type: 'euclidean',
-      lengthPercent: 50,
+      percent: 50,
     },
     grid: {
       show: true,
@@ -49,15 +53,16 @@ const config = useSessionStorage<GlobalConfig>(
 )
 
 function checkAllFeatureKeys() {
-  config.value.features = []
+  const set = new Set(config.value.features)
   const keys = features.checkboxes.flatMap(
     c => ('disabled' in c && c.disabled) || c.value === 'radialLengthSequence'
       ? []
       : [c.value],
   )
   for (const k of keys) {
-    config.value.features.push(k)
+    set.add(k)
   }
+  config.value.features = Array.from(set)
 }
 
 function clearAllFeatureKeys() {
@@ -126,7 +131,7 @@ const db = computed<FeaturesDb>(() => {
 })
 
 const robot = useRobot({ x: 300, y: 90, speed: 1 })
-const topkPoints = shallowRef<Point[]>()
+const topk = shallowRef<TopK>()
 const hoverPoint = shallowRef<Point>()
 const finding = shallowRef(false)
 
@@ -155,7 +160,7 @@ function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
     }
   })()
 
-  const all: { viewpoint: Point, d: number }[] = []
+  const all: TopK = []
   for (const viewpoint of viewpoints) {
     const points = cast(viewpoint, lines)
     const features = computeFeatures(viewpoint, points, config.value.features)
@@ -179,8 +184,8 @@ function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
       if (!entry.features)
         continue
 
-      const d = distFn(features, entry.features, config.value.distance.lengthPercent)
-      matches.push({ viewpoint: entry.viewpoint, d })
+      const d = distFn(features, entry.features, config.value.distance.percent)
+      matches.push({ point: entry.viewpoint, d })
     }
 
     matches.sort((a, b) => a.d - b.d)
@@ -189,16 +194,16 @@ function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
 
   all.sort((a, b) => a.d - b.d)
 
-  const res: Point[] = []
-  while (res.length < k) {
-    const point = all.splice(0, 1)[0].viewpoint
-    const existed = res.find(p => p.x === point.x && p.y === point.y)
+  const result: TopK = []
+  while (result.length < k) {
+    const item = all.splice(0, 1)[0]
+    const existed = result.find(p => p.point.x === item.point.x && p.point.y === item.point.y)
 
     if (!existed)
-      res.push(point)
+      result.push(item)
   }
 
-  return res
+  return result
 }
 
 const canvasEl = useTemplateRef('canvas')
@@ -299,12 +304,12 @@ function draw() {
   ctx.fill()
 
   // Draw topk
-  if (topkPoints.value) {
+  if (topk.value) {
     ctx.fillStyle = warningClr
     let i = 0
-    for (const k of topkPoints.value) {
+    for (const k of topk.value) {
       ctx.beginPath()
-      ctx.arc(k.x, k.y, 8 - i++, 0, 2 * Math.PI)
+      ctx.arc(k.point.x, k.point.y, 8 - i++, 0, 2 * Math.PI)
       ctx.fill()
     }
   }
@@ -370,15 +375,19 @@ useEventListener('keydown', (e) => {
     return
 
   if (e.key.toLowerCase() === 'f') {
-    if (config.value.features.includes('radialLengthSequence')) {
+    if (config.value.features.includes('radialLengthSequence')
+      && config.value.distance.percent) {
       finding.value = true
     }
 
     setTimeout(() => {
       const viewpoint = { x: robot.x.value, y: robot.y.value }
-      topkPoints.value = predict(viewpoint).map(p => ({
-        x: Math.round(p.x),
-        y: Math.round(p.y),
+      topk.value = predict(viewpoint).map(k => ({
+        d: k.d,
+        point: {
+          x: Math.round(k.point.x),
+          y: Math.round(k.point.y),
+        },
       }))
       finding.value = false
     }, 100)
@@ -423,58 +432,54 @@ function animate() {
 }
 onMounted(animate)
 
-useEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() === 't') {
-    test()
-  }
-})
+// useEventListener('keydown', (e) => {
+//   if (e.key.toLowerCase() === 't') {
+//     if (!config.value.features.length)
+//       return
 
-function test() {
-  if (!config.value.features.length)
-    return
+//     console.log('Begin')
 
-  console.log('Begin')
+//     let pass = 0
+//     const bound = map.config.cell / 5
+//     const viewpoints = grid.value.flatMap(p => [
+//       { x: p.x, y: p.y },
+//       { x: p.x - bound, y: p.y },
+//       { x: p.x + bound, y: p.y },
+//       { x: p.x, y: p.y - bound },
+//       { x: p.x, y: p.y + bound },
+//       { x: p.x - bound, y: p.y - bound },
+//       { x: p.x - bound, y: p.y + bound },
+//       { x: p.x + bound, y: p.y - bound },
+//       { x: p.x + bound, y: p.y + bound },
+//     ])
 
-  let pass = 0
-  const bound = map.config.cell / 5
-  const viewpoints = grid.value.flatMap(p => [
-    { x: p.x, y: p.y },
-    { x: p.x - bound, y: p.y },
-    { x: p.x + bound, y: p.y },
-    { x: p.x, y: p.y - bound },
-    { x: p.x, y: p.y + bound },
-    { x: p.x - bound, y: p.y - bound },
-    { x: p.x - bound, y: p.y + bound },
-    { x: p.x + bound, y: p.y - bound },
-    { x: p.x + bound, y: p.y + bound },
-  ])
+//     for (const viewpoint of viewpoints) {
+//       const points = predict(viewpoint)
+//       let found = false
+//       for (const point of points) {
+//         if (point.x > viewpoint.x - bound
+//           && point.x < viewpoint.x + bound
+//           && point.y > viewpoint.y - bound
+//           && point.y < viewpoint.y + bound
+//         ) {
+//           found = true
+//           break
+//         }
+//       }
 
-  for (const viewpoint of viewpoints) {
-    const points = predict(viewpoint)
-    let found = false
-    for (const point of points) {
-      if (point.x > viewpoint.x - bound
-        && point.x < viewpoint.x + bound
-        && point.y > viewpoint.y - bound
-        && point.y < viewpoint.y + bound
-      ) {
-        found = true
-        break
-      }
-    }
+//       if (found)
+//         pass += 1
+//     }
 
-    if (found)
-      pass += 1
-  }
-
-  const rate = (pass * 100) / viewpoints.length
-  console.log(`
-Grid:  ${config.value.grid.type}
-Dist:  ${config.value.distance}
-Feats: ${config.value.features}
-Rate:  ${rate}
-  `)
-}
+//     const rate = (pass * 100) / viewpoints.length
+//     console.log(`
+//     Grid:  ${config.value.grid.type}
+//     Dist:  ${config.value.distance}
+//     Feats: ${config.value.features}
+//     Rate:  ${rate}
+//       `)
+//   }
+// })
 </script>
 
 <template>
@@ -526,10 +531,11 @@ Rate:  ${rate}
                 Top 3 positions:
               </p>
               <span
-                v-for="f, i of topkPoints"
+                v-for="k, i of topk"
                 :key="i"
               >
-                <span class="text-success">{{ i + 1 }}.</span>({{ f.x }},{{ f.y }})
+                <span class="text-success">{{ i + 1 }}.</span>
+                <span>({{ k.point.x }},{{ k.point.y }})</span>
               </span>
             </div>
           </div>
@@ -574,7 +580,7 @@ Rate:  ${rate}
                         @click.prevent
                       >
                         <USlider
-                          v-model="config.distance.lengthPercent"
+                          v-model="config.distance.percent"
                           :min="0"
                           :max="100"
                           :step="25"
@@ -582,7 +588,7 @@ Rate:  ${rate}
                           class="w-24"
                           color="info"
                         />
-                        <span class="text-xs">{{ config.distance.lengthPercent }}%</span>
+                        <span class="text-xs">{{ config.distance.percent }}% length</span>
                       </div>
                     </template>
                   </div>
