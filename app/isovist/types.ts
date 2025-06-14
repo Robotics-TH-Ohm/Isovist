@@ -10,8 +10,8 @@ export interface Line {
   y2: number
 }
 
-export type Obstacle =
-  {
+export type Obstacle
+  = {
     type: 'circle'
     lines: Line[]
     cx: number
@@ -19,8 +19,8 @@ export type Obstacle =
     r: number
     fill?: boolean
     border?: boolean
-  } |
-  {
+  }
+  | {
     type: 'polygon'
     lines: Line[]
     fill?: boolean

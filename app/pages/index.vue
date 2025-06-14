@@ -5,7 +5,7 @@ import { computeFeatures, features, normalize } from '~/isovist/features'
 import { orthogonalGrid, randomGrid } from '~/isovist/grid'
 import { map } from '~/isovist/map'
 import { useRobot } from '~/isovist/robot'
-import { cast, distPointToLine } from '~/isovist/utils'
+import { cast, distPointToLine, distPointToPoint } from '~/isovist/utils'
 
 const obstacles = map.obstacles
 const lines = obstacles.flatMap(o => o.type === 'line' ? o.line : o.lines)
@@ -115,11 +115,11 @@ const db = computed<FeaturesDb>(() => {
 })
 
 const robot = useRobot({ x: 300, y: 90, speed: 1 })
-const topk = shallowRef<TopK>()
+const prediction = shallowRef<{ time: string, topk: TopK }>()
 const hover = shallowRef<Point>()
 const finding = shallowRef(false)
 
-function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
+function predict(viewpoint: Point, k = 3, step = map.config.cell / 5): TopK {
   const viewpoints = []
 
   if (step) {
@@ -178,16 +178,19 @@ function predict(viewpoint: Point, k = 3, step = map.config.cell / 5) {
 
   all.sort((a, b) => a.d - b.d)
 
-  const result: TopK = []
-  while (result.length < k) {
+  const topk: TopK = []
+  while (topk.length < k) {
     const item = all.splice(0, 1)[0]
-    const existed = result.find(p => p.point.x === item.point.x && p.point.y === item.point.y)
+    const existed = topk.find(p => p.point.x === item.point.x && p.point.y === item.point.y)
 
     if (!existed)
-      result.push(item)
+      topk.push(item)
   }
 
-  return result
+  return topk.map(x => ({
+    d: distPointToPoint(robot.viewpoint.value, x.point),
+    point: x.point,
+  }))
 }
 
 const canvasEl = useTemplateRef('canvas')
@@ -268,7 +271,7 @@ function draw() {
   })
 
   if (config.value.lidar.rays || config.value.lidar.points) {
-    const points = cast({ x: robot.x.value, y: robot.y.value }, lines)
+    const points = cast(robot.viewpoint.value, lines)
 
     // Draw rays
     if (config.value.lidar.rays) {
@@ -302,10 +305,10 @@ function draw() {
   ctx.fill()
 
   // Draw topk
-  if (topk.value && config.value.prediction.show) {
+  if (prediction.value && config.value.prediction.show) {
     ctx.fillStyle = warningClr
     let i = 0
-    for (const k of topk.value) {
+    for (const k of prediction.value.topk) {
       ctx.beginPath()
       ctx.arc(k.point.x, k.point.y, 8 - i++, 0, 2 * Math.PI)
       ctx.fill()
@@ -393,14 +396,19 @@ useEventListener('keydown', (e) => {
     }
 
     setTimeout(() => {
-      const viewpoint = { x: robot.x.value, y: robot.y.value }
-      topk.value = predict(viewpoint).map(k => ({
+      const timeStart = new Date().getTime()
+      const topk = predict(robot.viewpoint.value).map(k => ({
         d: +k.d.toFixed(2),
         point: {
           x: Math.round(k.point.x),
           y: Math.round(k.point.y),
         },
       }))
+      const timeEnd = new Date().getTime()
+      prediction.value = {
+        topk,
+        time: ((timeEnd - timeStart) / 1000).toFixed(2),
+      }
       finding.value = false
     }, 100)
   }
@@ -549,15 +557,19 @@ onMounted(animate)
 
             <div class="flex flex-wrap gap-3">
               <p class="font-extrabold">
-                Top 3 positions:
+                Top 3:
               </p>
-              <span
-                v-for="k, i of topk"
-                :key="i"
-              >
-                <span class="text-success">{{ i + 1 }}.</span>
-                <span>({{ k.point.x }},{{ k.point.y }} | <span class="text-dimmed">{{ k.d }}</span>)</span>
-              </span>
+              <template v-if="prediction">
+                <span
+                  v-for="k, i of prediction.topk"
+                  :key="i"
+                >
+                  <span class="text-success">{{ i + 1 }}.</span>
+                  <span>({{ k.point.x }},{{ k.point.y }} | <span class="text-dimmed">{{ k.d }}</span>)</span>
+                </span>
+
+                <span class="text-warning">in {{ prediction.time }}s</span>
+              </template>
             </div>
           </div>
         </UCard>
@@ -679,7 +691,7 @@ onMounted(animate)
         <UCard>
           <div class="grid gap-3">
             <p class="font-extrabold">
-              Others
+              Display
             </p>
             <div class="flex gap-10">
               <USwitch
