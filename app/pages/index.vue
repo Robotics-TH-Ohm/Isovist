@@ -503,7 +503,7 @@ onMounted(animate)
 </script>
 
 <template>
-  <div class="p-6 mx-auto font-mono @container">
+  <div class="p-6 mx-auto @container">
     <div class="grid grid-cols-1 gap-3 @min-[1200px]:grid-cols-2 @min-[1200px]:gap-6">
       <div class="relative flex flex-col gap-3 items-center justify-center">
         <Header />
@@ -526,13 +526,13 @@ onMounted(animate)
         <UCard>
           <div class="grid gap-1">
             <p>
-              <span class="font-extrabold text-success">W/A/S/D</span> to move
+              <span class="font-bold text-success">W/A/S/D</span> to move
             </p>
             <p>
-              <span class="font-extrabold text-success">F</span> to predict position
+              <span class="font-bold text-success">F</span> to predict position
             </p>
             <p>
-              Hover on grid node to show rays
+              Hover on grid node to examine.
             </p>
           </div>
         </UCard>
@@ -541,14 +541,14 @@ onMounted(animate)
           <div class="grid gap-3">
             <div class="flex gap-3">
               <div>
-                <span class="font-extrabold">Robot: </span>
+                <span class="font-bold">Robot: </span>
                 <span class="text-success">
                   ({{ robot.x.value }},{{ robot.y.value }})
                 </span>
               </div>
               |
               <div>
-                <span class="font-extrabold">Hover: </span>
+                <span class="font-bold">Hover: </span>
                 <span class="text-success">
                   ({{ hover?.x }},{{ hover?.y }})
                 </span>
@@ -556,7 +556,7 @@ onMounted(animate)
             </div>
 
             <div class="flex flex-wrap gap-3">
-              <p class="font-extrabold">
+              <p class="font-bold">
                 Top 3:
               </p>
               <template v-if="prediction">
@@ -579,7 +579,7 @@ onMounted(animate)
         <UCard>
           <div class="grid gap-3">
             <div class="flex items-center justify-between">
-              <p class="font-extrabold">
+              <p class="font-bold">
                 Features
               </p>
               <div class="flex gap-2">
@@ -606,7 +606,7 @@ onMounted(animate)
               <template #label="{ item }">
                 <template v-if="item.value === 'radialLengthSequence'">
                   <div class="flex items-center gap-6">
-                    <span class="shrink-0">{{ (item as any).label }} (Slow)</span>
+                    <span class="shrink-0">{{ (item as any).label }} <span class="text-warning">(Slow)</span></span>
                     <template v-if="config.features.includes('radialLengthSequence')">
                       <div
                         class="flex items-center gap-3"
@@ -637,7 +637,7 @@ onMounted(animate)
 
         <UCard>
           <div class="grid gap-3">
-            <p class="mb-2 font-extrabold">
+            <p class="mb-2 font-bold">
               Distances
             </p>
             <URadioGroup
@@ -655,7 +655,7 @@ onMounted(animate)
 
         <UCard>
           <div class="grid gap-3">
-            <p class="font-extrabold">
+            <p class="font-bold">
               Grid
             </p>
 
@@ -690,7 +690,7 @@ onMounted(animate)
 
         <UCard>
           <div class="grid gap-3">
-            <p class="font-extrabold">
+            <p class="font-bold">
               Display
             </p>
             <div class="flex gap-10">

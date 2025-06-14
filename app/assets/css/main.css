@@ -9,3 +9,7 @@
   --ui-primary: white;
   --ui-bg: var(--ui-color-neutral-950);
 }
+
+body {
+  font-family: 'IBM Plex Mono';
+}

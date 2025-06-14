@@ -38,7 +38,7 @@ if (colorMode.preference === 'system') {
     </UTooltip>
   </div>
 
-  <h1 class="text-success text-xl font-semibold">
+  <h1 class="text-success text-xl font-medium tracking-wider">
     Kidnapped Robot Problem & Isovisten
   </h1>
 </template>
